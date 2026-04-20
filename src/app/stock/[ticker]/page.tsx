@@ -47,14 +47,31 @@ interface BrieferResponseItem {
   brief: string;
 }
 
+const CRORE = 1_00_00_000;           // 10^7
+const LAKH_CRORE = 1_00_000_00_00_000; // 10^12
+
+function formatMarketCap(raw: number | string | null | undefined): string {
+  if (raw === null || raw === undefined || raw === "") return "N/A";
+  const num = typeof raw === "string" ? parseFloat(raw) : raw;
+  if (!num || isNaN(num)) return "N/A";
+  if (num >= LAKH_CRORE) {
+    return `₹${(num / LAKH_CRORE).toFixed(2)} L Cr`;
+  }
+  if (num >= 1000 * CRORE) {
+    return `₹${Math.round(num / CRORE).toLocaleString("en-IN")} Cr`;
+  }
+  return `₹${(num / CRORE).toFixed(2)} Cr`;
+}
+
 const METRIC_CONFIG: {
   key: keyof Omit<Fundamentals, "revenue" | "name">;
   label: string;
   prefix?: string;
   suffix?: string;
+  formatter?: (v: number | string | null | undefined) => string;
 }[] = [
   { key: "price", label: "Price", prefix: "₹" },
-  { key: "market_cap", label: "Market Cap", prefix: "₹", suffix: " Cr" },
+  { key: "market_cap", label: "Market Cap", formatter: formatMarketCap },
   { key: "pe_ratio", label: "P/E Ratio" },
   { key: "pb_ratio", label: "P/B Ratio" },
   { key: "eps", label: "EPS", prefix: "₹" },
@@ -68,9 +85,6 @@ function formatValue(raw: number | string | null | undefined): string {
   if (raw === null || raw === undefined || raw === "") return "—";
   const num = typeof raw === "string" ? parseFloat(raw) : raw;
   if (isNaN(num)) return String(raw);
-  if (Math.abs(num) >= 1_00_000) {
-    return (num / 1_00_000).toLocaleString("en-IN", { maximumFractionDigits: 2 }) + "L";
-  }
   return num.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
@@ -79,14 +93,16 @@ function MetricCard({
   value,
   prefix,
   suffix,
+  formatter,
 }: {
   label: string;
   value: number | string | null | undefined;
   prefix?: string;
   suffix?: string;
+  formatter?: (v: number | string | null | undefined) => string;
 }) {
-  const display = formatValue(value);
-  const isEmpty = display === "—";
+  const display = formatter ? formatter(value) : formatValue(value);
+  const isEmpty = display === "—" || display === "N/A";
 
   return (
     <div className="rounded-xl p-4 flex flex-col gap-1" style={{ backgroundColor: "#d1ccdc" }}>
@@ -97,7 +113,7 @@ function MetricCard({
         className="text-lg font-bold leading-tight"
         style={{ color: isEmpty ? "#886f68" : "#3d2c2e" }}
       >
-        {isEmpty ? "—" : `${prefix ?? ""}${display}${suffix ?? ""}`}
+        {formatter ? display : isEmpty ? "—" : `${prefix ?? ""}${display}${suffix ?? ""}`}
       </span>
     </div>
   );
@@ -424,6 +440,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                         value={fundamentals?.[m.key]}
                         prefix={m.prefix}
                         suffix={m.suffix}
+                        formatter={m.formatter}
                       />
                     ))}
               </div>
