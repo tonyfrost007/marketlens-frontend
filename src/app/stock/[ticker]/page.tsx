@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import { createClient } from "@/lib/supabase/client";
 
 const TICKER_TO_COMPANY: Record<string, string> = {
   INFY: "Infosys",
@@ -144,9 +145,54 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
           typeof item.fundamentals === "string"
             ? JSON.parse(item.fundamentals.trim())
             : item.fundamentals;
+        const briefText = item.brief ?? null;
+
         if (!cancelled) {
           setFundamentals(parsedFundamentals);
-          setBrief(item.brief ?? null);
+          setBrief(briefText);
+        }
+
+        // Fire-and-forget Supabase saves — errors don't affect the UI
+        const supabase = createClient();
+        const now = new Date().toISOString();
+
+        supabase
+          .from("stocks")
+          .upsert(
+            {
+              ticker: nseTicker,
+              name: parsedFundamentals.name ?? company,
+              pe_ratio: parsedFundamentals.pe_ratio,
+              pb_ratio: parsedFundamentals.pb_ratio,
+              roe: parsedFundamentals.roe,
+              eps: parsedFundamentals.eps,
+              market_cap: parsedFundamentals.market_cap,
+              debt_to_equity: parsedFundamentals.debt_to_equity,
+              revenue: parsedFundamentals.revenue,
+              price: parsedFundamentals.price,
+              high_52w: parsedFundamentals.high_52w,
+              low_52w: parsedFundamentals.low_52w,
+              updated_at: now,
+            },
+            { onConflict: "ticker" }
+          )
+          .then(({ error: e }) => {
+            if (e) console.error("[supabase] stocks upsert:", e.message);
+          });
+
+        if (briefText) {
+          supabase
+            .from("ai_summaries")
+            .insert({
+              ticker: nseTicker,
+              summary_type: "company",
+              content: briefText,
+              generated_at: now,
+              model_version: "llama-3.1-8b-instant",
+            })
+            .then(({ error: e }) => {
+              if (e) console.error("[supabase] ai_summaries insert:", e.message);
+            });
         }
       } catch (e) {
         if (!cancelled)
