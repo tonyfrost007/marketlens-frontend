@@ -124,15 +124,14 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<"live" | "cached" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
-    const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-    function isFresh(timestamp: string | null | undefined): boolean {
-      if (!timestamp) return false;
-      return Date.now() - new Date(timestamp).getTime() < CACHE_TTL_MS;
+    function sixHoursAgo(): string {
+      return new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
     }
 
     async function saveToSupabase(f: Fundamentals, briefText: string | null) {
@@ -199,39 +198,41 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
     async function load() {
       try {
-        // Check cache: fetch stocks row and latest brief in parallel
+        const cutoff = sixHoursAgo();
+
+        // Query Supabase for fresh rows — staleness filtered server-side
         const [stocksRes, summaryRes] = await Promise.all([
           supabase
             .from("stocks")
             .select("*")
             .eq("ticker", nseTicker)
-            .single(),
+            .gt("updated_at", cutoff)
+            .maybeSingle(),
           supabase
             .from("ai_summaries")
             .select("content, generated_at")
             .eq("ticker", nseTicker)
             .eq("summary_type", "company")
+            .gt("generated_at", cutoff)
             .order("generated_at", { ascending: false })
             .limit(1)
-            .single(),
+            .maybeSingle(),
         ]);
 
         const cachedStock = stocksRes.data;
         const cachedSummary = summaryRes.data;
 
-        const stockFresh = isFresh(cachedStock?.updated_at);
-        const briefFresh = isFresh(cachedSummary?.generated_at);
-
-        if (stockFresh && briefFresh && cachedSummary) {
+        if (cachedStock && cachedSummary) {
           // Full cache hit — skip webhook entirely
           if (!cancelled) {
             setFundamentals(cachedStock as Fundamentals);
             setBrief(cachedSummary.content);
+            setSource("cached");
           }
           return;
         }
 
-        // Cache miss (or stale) — call n8n webhook
+        // Cache miss or stale — call n8n webhook
         const res = await fetch(
           "https://n8n-production-910a0.up.railway.app/webhook/briefer",
           {
@@ -252,6 +253,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
         if (!cancelled) {
           setFundamentals(parsedFundamentals);
           setBrief(briefText);
+          setSource("live");
         }
 
         saveToSupabase(parsedFundamentals, briefText);
@@ -312,6 +314,21 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
           <span className="text-sm font-bold" style={{ color: "#3d2c2e" }}>
             {nseTicker}
           </span>
+          {source && (
+            <span
+              className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md"
+              style={{
+                backgroundColor: source === "live" ? "#fff3e0" : "#f0f0f0",
+                color: source === "live" ? "#e65100" : "#757575",
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: source === "live" ? "#e65100" : "#9e9e9e" }}
+              />
+              {source === "live" ? "Live" : "Cached"}
+            </span>
+          )}
         </div>
       </header>
 
