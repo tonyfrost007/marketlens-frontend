@@ -137,43 +137,63 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
     async function saveToSupabase(f: Fundamentals, briefText: string | null) {
       const now = new Date().toISOString();
-      supabase
+
+      const stockPayload = {
+        ticker: nseTicker,
+        name: f.name ?? company,
+        pe_ratio: f.pe_ratio,
+        pb_ratio: f.pb_ratio,
+        roe: f.roe,
+        eps: f.eps,
+        market_cap: f.market_cap,
+        debt_to_equity: f.debt_to_equity,
+        revenue: f.revenue,
+        price: f.price,
+        high_52w: f.high_52w,
+        low_52w: f.low_52w,
+        updated_at: now,
+      };
+      console.log("[supabase] stocks upsert payload:", stockPayload);
+
+      const { data: stockData, error: stockError } = await supabase
         .from("stocks")
-        .upsert(
-          {
-            ticker: nseTicker,
-            name: f.name ?? company,
-            pe_ratio: f.pe_ratio,
-            pb_ratio: f.pb_ratio,
-            roe: f.roe,
-            eps: f.eps,
-            market_cap: f.market_cap,
-            debt_to_equity: f.debt_to_equity,
-            revenue: f.revenue,
-            price: f.price,
-            high_52w: f.high_52w,
-            low_52w: f.low_52w,
-            updated_at: now,
-          },
-          { onConflict: "ticker" }
-        )
-        .then(({ error: e }) => {
-          if (e) console.error("[supabase] stocks upsert:", e.message);
+        .upsert(stockPayload, { onConflict: "ticker" })
+        .select();
+      if (stockError) {
+        console.error("[supabase] stocks upsert error:", {
+          message: stockError.message,
+          code: stockError.code,
+          details: stockError.details,
+          hint: stockError.hint,
         });
+      } else {
+        console.log("[supabase] stocks upsert success:", stockData);
+      }
 
       if (briefText) {
-        supabase
+        const summaryPayload = {
+          ticker: nseTicker,
+          summary_type: "company",
+          content: briefText,
+          generated_at: now,
+          model_version: "llama-3.1-8b-instant",
+        };
+        console.log("[supabase] ai_summaries insert payload:", summaryPayload);
+
+        const { data: summaryData, error: summaryError } = await supabase
           .from("ai_summaries")
-          .insert({
-            ticker: nseTicker,
-            summary_type: "company",
-            content: briefText,
-            generated_at: now,
-            model_version: "llama-3.1-8b-instant",
-          })
-          .then(({ error: e }) => {
-            if (e) console.error("[supabase] ai_summaries insert:", e.message);
+          .insert(summaryPayload)
+          .select();
+        if (summaryError) {
+          console.error("[supabase] ai_summaries insert error:", {
+            message: summaryError.message,
+            code: summaryError.code,
+            details: summaryError.details,
+            hint: summaryError.hint,
           });
+        } else {
+          console.log("[supabase] ai_summaries insert success:", summaryData);
+        }
       }
     }
 
