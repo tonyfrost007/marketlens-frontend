@@ -127,9 +127,91 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
   useEffect(() => {
     let cancelled = false;
+    const supabase = createClient();
+    const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-    async function fetchBrief() {
+    function isFresh(timestamp: string | null | undefined): boolean {
+      if (!timestamp) return false;
+      return Date.now() - new Date(timestamp).getTime() < CACHE_TTL_MS;
+    }
+
+    async function saveToSupabase(f: Fundamentals, briefText: string | null) {
+      const now = new Date().toISOString();
+      supabase
+        .from("stocks")
+        .upsert(
+          {
+            ticker: nseTicker,
+            name: f.name ?? company,
+            pe_ratio: f.pe_ratio,
+            pb_ratio: f.pb_ratio,
+            roe: f.roe,
+            eps: f.eps,
+            market_cap: f.market_cap,
+            debt_to_equity: f.debt_to_equity,
+            revenue: f.revenue,
+            price: f.price,
+            high_52w: f.high_52w,
+            low_52w: f.low_52w,
+            updated_at: now,
+          },
+          { onConflict: "ticker" }
+        )
+        .then(({ error: e }) => {
+          if (e) console.error("[supabase] stocks upsert:", e.message);
+        });
+
+      if (briefText) {
+        supabase
+          .from("ai_summaries")
+          .insert({
+            ticker: nseTicker,
+            summary_type: "company",
+            content: briefText,
+            generated_at: now,
+            model_version: "llama-3.1-8b-instant",
+          })
+          .then(({ error: e }) => {
+            if (e) console.error("[supabase] ai_summaries insert:", e.message);
+          });
+      }
+    }
+
+    async function load() {
       try {
+        // Check cache: fetch stocks row and latest brief in parallel
+        const [stocksRes, summaryRes] = await Promise.all([
+          supabase
+            .from("stocks")
+            .select("*")
+            .eq("ticker", nseTicker)
+            .single(),
+          supabase
+            .from("ai_summaries")
+            .select("content, generated_at")
+            .eq("ticker", nseTicker)
+            .eq("summary_type", "company")
+            .order("generated_at", { ascending: false })
+            .limit(1)
+            .single(),
+        ]);
+
+        const cachedStock = stocksRes.data;
+        const cachedSummary = summaryRes.data;
+
+        const stockFresh = isFresh(cachedStock?.updated_at);
+        const briefFresh = isFresh(cachedSummary?.generated_at);
+
+        if (stockFresh && briefFresh && cachedSummary) {
+          // Full cache hit — skip webhook entirely
+          if (!cancelled) {
+            setFundamentals(cachedStock as Fundamentals);
+            setBrief(cachedSummary.content);
+          }
+          return;
+        }
+
+        // Cache miss (or stale) — call n8n webhook
         const res = await fetch(
           "https://n8n-production-910a0.up.railway.app/webhook/briefer",
           {
@@ -152,48 +234,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
           setBrief(briefText);
         }
 
-        // Fire-and-forget Supabase saves — errors don't affect the UI
-        const supabase = createClient();
-        const now = new Date().toISOString();
-
-        supabase
-          .from("stocks")
-          .upsert(
-            {
-              ticker: nseTicker,
-              name: parsedFundamentals.name ?? company,
-              pe_ratio: parsedFundamentals.pe_ratio,
-              pb_ratio: parsedFundamentals.pb_ratio,
-              roe: parsedFundamentals.roe,
-              eps: parsedFundamentals.eps,
-              market_cap: parsedFundamentals.market_cap,
-              debt_to_equity: parsedFundamentals.debt_to_equity,
-              revenue: parsedFundamentals.revenue,
-              price: parsedFundamentals.price,
-              high_52w: parsedFundamentals.high_52w,
-              low_52w: parsedFundamentals.low_52w,
-              updated_at: now,
-            },
-            { onConflict: "ticker" }
-          )
-          .then(({ error: e }) => {
-            if (e) console.error("[supabase] stocks upsert:", e.message);
-          });
-
-        if (briefText) {
-          supabase
-            .from("ai_summaries")
-            .insert({
-              ticker: nseTicker,
-              summary_type: "company",
-              content: briefText,
-              generated_at: now,
-              model_version: "llama-3.1-8b-instant",
-            })
-            .then(({ error: e }) => {
-              if (e) console.error("[supabase] ai_summaries insert:", e.message);
-            });
-        }
+        saveToSupabase(parsedFundamentals, briefText);
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Something went wrong");
@@ -202,7 +243,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
       }
     }
 
-    fetchBrief();
+    load();
     return () => { cancelled = true; };
   }, [company, nseTicker]);
 
