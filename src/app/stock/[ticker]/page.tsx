@@ -26,7 +26,7 @@ const TICKER_TO_COMPANY: Record<string, string> = {
   ITC: "ITC",
 };
 
-interface BrieferResponse {
+interface Fundamentals {
   pe_ratio?: number | string | null;
   pb_ratio?: number | string | null;
   roe?: number | string | null;
@@ -36,11 +36,17 @@ interface BrieferResponse {
   high_52w?: number | string | null;
   low_52w?: number | string | null;
   debt_to_equity?: number | string | null;
-  choices?: Array<{ message: { content: string } }>;
+  revenue?: number | string | null;
+  name?: string | null;
+}
+
+interface BrieferResponseItem {
+  fundamentals: string | Fundamentals;
+  brief: string;
 }
 
 const METRIC_CONFIG: {
-  key: keyof Omit<BrieferResponse, "choices">;
+  key: keyof Omit<Fundamentals, "revenue" | "name">;
   label: string;
   prefix?: string;
   suffix?: string;
@@ -108,11 +114,12 @@ function SkeletonCard() {
 }
 
 export default function StockPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker.toUpperCase();
+  const ticker = params.ticker.toUpperCase().replace(/\.(NS|BO)$/, "");
   const nseTicker = `${ticker}.NS`;
   const company = TICKER_TO_COMPANY[ticker] ?? ticker;
 
-  const [data, setData] = useState<BrieferResponse | null>(null);
+  const [fundamentals, setFundamentals] = useState<Fundamentals | null>(null);
+  const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,8 +137,16 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
           }
         );
         if (!res.ok) throw new Error(`API returned ${res.status}`);
-        const json: BrieferResponse = await res.json();
-        if (!cancelled) setData(json);
+        const json: BrieferResponseItem[] = await res.json();
+        const item = json[0];
+        const parsedFundamentals: Fundamentals =
+          typeof item.fundamentals === "string"
+            ? JSON.parse(item.fundamentals.trim())
+            : item.fundamentals;
+        if (!cancelled) {
+          setFundamentals(parsedFundamentals);
+          setBrief(item.brief ?? null);
+        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Something went wrong");
@@ -143,8 +158,6 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
     fetchBrief();
     return () => { cancelled = true; };
   }, [company, nseTicker]);
-
-  const brief = data?.choices?.[0]?.message?.content ?? null;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#f5edf0" }}>
@@ -257,7 +270,8 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
               onClick={() => {
                 setError(null);
                 setLoading(true);
-                setData(null);
+                setFundamentals(null);
+                setBrief(null);
               }}
               className="mt-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
               style={{ backgroundColor: "#3d2c2e", color: "#f5edf0" }}
@@ -282,7 +296,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                       <MetricCard
                         key={m.key}
                         label={m.label}
-                        value={data?.[m.key]}
+                        value={fundamentals?.[m.key]}
                         prefix={m.prefix}
                         suffix={m.suffix}
                       />
