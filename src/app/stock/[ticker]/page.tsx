@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 
 const TICKER_TO_COMPANY: Record<string, string> = {
   INFY: "Infosys",
@@ -328,14 +329,26 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
                 </div>
               ) : brief ? (
                 <div
-                  className="rounded-2xl p-6 text-sm leading-relaxed whitespace-pre-wrap"
+                  className="rounded-2xl p-6 text-sm leading-relaxed prose prose-sm max-w-none"
                   style={{
                     backgroundColor: "white",
                     border: "1px solid #d1ccdc",
                     color: "#424c55",
                   }}
                 >
-                  {brief}
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h1 className="text-base font-bold mb-2" style={{ color: "#3d2c2e" }}>{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-bold mb-2" style={{ color: "#3d2c2e" }}>{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-bold mb-1" style={{ color: "#3d2c2e" }}>{children}</h3>,
+                      strong: ({ children }) => <strong className="font-semibold" style={{ color: "#3d2c2e" }}>{children}</strong>,
+                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+                    }}
+                  >
+                    {brief}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <div
