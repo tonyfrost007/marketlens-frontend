@@ -31,7 +31,15 @@ export default function Home() {
             MarketLens
           </span>
         </div>
-        <span className="text-xs text-gray-400 font-medium">NSE India</span>
+        <div className="flex items-center gap-4">
+          <a
+            href="/sector/Information%20Technology"
+            className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+          >
+            Sectors
+          </a>
+          <span className="text-xs text-gray-400 font-medium">NSE India</span>
+        </div>
       </header>
 
       {/* Hero */}
