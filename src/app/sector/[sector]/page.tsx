@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { createClient } from "@/lib/supabase/client";
+
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  strong: ({ children }) => (
+    <strong className="font-semibold" style={{ color: "#3d2c2e" }}>{children}</strong>
+  ),
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+};
 
 const SECTORS = [
   "Information Technology",
@@ -239,11 +250,8 @@ export default function SectorPage({ params }: { params: { sector: string } }) {
                   </h2>
                   <div className="flex-1 h-px" style={{ backgroundColor: "#d1ccdc" }} />
                 </div>
-                <div
-                  className="text-sm leading-relaxed whitespace-pre-wrap"
-                  style={{ color: "#424c55" }}
-                >
-                  {section.body}
+                <div className="text-sm leading-relaxed" style={{ color: "#424c55" }}>
+                  <ReactMarkdown components={mdComponents}>{section.body}</ReactMarkdown>
                 </div>
               </div>
             ))}
@@ -252,11 +260,8 @@ export default function SectorPage({ params }: { params: { sector: string } }) {
 
         {/* Fallback: show raw content if sections couldn't be parsed */}
         {!loading && content && sections.length === 0 && (
-          <div
-            className="text-sm leading-relaxed whitespace-pre-wrap"
-            style={{ color: "#424c55" }}
-          >
-            {content}
+          <div className="text-sm leading-relaxed" style={{ color: "#424c55" }}>
+            <ReactMarkdown components={mdComponents}>{content}</ReactMarkdown>
           </div>
         )}
       </main>
