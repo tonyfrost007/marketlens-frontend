@@ -42,10 +42,6 @@ interface Fundamentals {
   name?: string | null;
 }
 
-interface BrieferResponseItem {
-  fundamentals: string | Fundamentals;
-  brief: string;
-}
 
 const CRORE = 1_00_00_000;           // 10^7
 const LAKH_CRORE = 1_00_000_00_00_000; // 10^12
