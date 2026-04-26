@@ -250,7 +250,7 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
 
         // Cache miss or stale — call n8n webhook
         const res = await fetch(
-          "https://n8n-production-910a0.up.railway.app/webhook/briefer",
+          "https://n8n-production-fa88.up.railway.app/webhook/briefer",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
