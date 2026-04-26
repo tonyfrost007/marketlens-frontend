@@ -257,10 +257,11 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
         const json = await res.json();
         console.log("[briefer] raw response:", json);
 
-        if (!Array.isArray(json) || json.length === 0 || !json[0]) {
+        // n8n may return a single object or an array with one item
+        const item = Array.isArray(json) ? json[0] : json;
+        if (!item) {
           throw new Error("Unable to load stock data. Please try again.");
         }
-        const item = json[0];
         if (!item.fundamentals) {
           throw new Error("Unable to load stock data. Please try again.");
         }
