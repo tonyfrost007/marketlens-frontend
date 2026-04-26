@@ -258,8 +258,16 @@ export default function StockPage({ params }: { params: { ticker: string } }) {
           }
         );
         if (!res.ok) throw new Error(`API returned ${res.status}`);
-        const json: BrieferResponseItem[] = await res.json();
+        const json = await res.json();
+        console.log("[briefer] raw response:", json);
+
+        if (!Array.isArray(json) || json.length === 0 || !json[0]) {
+          throw new Error("Unable to load stock data. Please try again.");
+        }
         const item = json[0];
+        if (!item.fundamentals) {
+          throw new Error("Unable to load stock data. Please try again.");
+        }
         const parsedFundamentals: Fundamentals =
           typeof item.fundamentals === "string"
             ? JSON.parse(item.fundamentals.trim())
