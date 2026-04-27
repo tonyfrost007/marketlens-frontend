@@ -197,6 +197,21 @@ export default function SectorPage({ params }: { params: { sector: string } }) {
           setContent(data.content);
           setGeneratedAt(data.generated_at);
           setLoading(false);
+
+          // Fetch stocks for this sector from Supabase
+          const { data: sectorRow } = await supabase
+            .from("sectors")
+            .select("tickers")
+            .eq("sector", sector)
+            .maybeSingle();
+
+          if (sectorRow?.tickers?.length && !cancelled) {
+            const { data: stockRows } = await supabase
+              .from("stocks")
+              .select("ticker, name, pe_ratio, pb_ratio, roe, eps, market_cap, price")
+              .in("ticker", sectorRow.tickers);
+            if (stockRows && !cancelled) setStocks(stockRows as StockRow[]);
+          }
           return;
         }
 
